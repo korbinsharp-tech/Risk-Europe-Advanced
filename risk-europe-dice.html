@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Risk Europe — Dice Roller</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080c14;
+      --bg2:       #0e1420;
+      --card:      rgba(255,255,255,0.035);
+      --card-b:    rgba(255,255,255,0.07);
+      --red:       #e84040;
+      --red-g:     linear-gradient(135deg,#e84040,#b91c1c);
+      --red-dim:   rgba(232,64,64,0.12);
+      --blue:      #4080ff;
+      --blue-g:    linear-gradient(135deg,#4080ff,#1d4ed8);
+      --blue-dim:  rgba(64,128,255,0.12);
+      --gold:      #f0b429;
+      --gold-g:    linear-gradient(135deg,#f0b429,#d97706);
+      --gold-dim:  rgba(240,180,41,0.1);
+      --green:     #22c55e;
+      --text:      #e8eaf0;
+      --sub:       #8892a4;
+      --border:    rgba(255,255,255,0.06);
+      --radius:    16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 16px 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* gradient orbs for depth */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(232,64,64,0.06) 0%, transparent 70%);
+      top: -100px; left: -100px;
+    }
+    body::after {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(64,128,255,0.06) 0%, transparent 70%);
+      bottom: -100px; right: -100px;
+    }
+
+    * { position: relative; z-index: 1; }
+
+    /* ─── HEADER ───────────────────────────── */
+    header { text-align: center; margin-bottom: 32px; }
+    .header-title {
+      font-size: 2.4rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      background: var(--gold-g);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 28px rgba(240,180,41,0.3));
+    }
+    .header-sub {
+      font-size: 0.72rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--sub);
+      margin-top: 6px;
+    }
+
+    /* ─── WIN PROBABILITY BAR ──────────────── */
+    .prob-card {
+      width: 100%;
+      max-width: 860px;
+      background: var(--card);
+      border: 1px solid var(--card-b);
+      border-radius: var(--radius);
+      padding: 20px 24px 18px;
+      margin-bottom: 12px;
+      backdrop-filter: blur(12px);
+    }
+    .prob-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .prob-side-label {
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .prob-side-label.atk { color: var(--red); }
+    .prob-side-label.def { color: var(--blue); }
+    .prob-center-pct {
+      font-size: 2rem;
+      font-weight: 900;
+      color: var(--gold);
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+    .prob-center-label {
+      font-size: 0.65rem;
+      color: var(--sub);
+      text-align: center;
+    }
+    .prob-track {
+      height: 10px;
+      background: var(--blue-dim);
+      border-radius: 99px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin: 6px 0 10px;
+    }
+    .prob-fill {
+      height: 100%;
+      background: var(--red-g);
+      border-radius: 99px;
+      transition: width 0.45s cubic-bezier(0.4,0,0.2,1);
+      min-width: 3px;
+    }
+    .rec-row { display: flex; justify-content: center; gap: 8px; align-items: center; }
+    .rec-pill {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 99px;
+    }
+    .rec-pill.blitz  { background: var(--gold-dim); color: var(--gold); }
+    .rec-pill.manual { background: var(--blue-dim); color: var(--blue); }
+    .rec-pill.either { background: var(--card); color: var(--sub); }
+    .rec-desc { font-size: 0.68rem; color: var(--sub); }
+
+    /* ─── SETUP ROW ────────────────────────── */
+    .setup-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      width: 100%;
+      max-width: 860px;
+      margin-bottom: 12px;
+    }
+
+    /* ─── COMBATANT PANELS ─────────────────── */
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--card-b);
+      border-radius: var(--radius);
+      padding: 22px 20px;
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .panel.atk { border-top: 2px solid var(--red); }
+    .panel.def { border-top: 2px solid var(--blue); }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.65rem;
+      font-weight: 800;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+    }
+    .panel.atk .panel-header { color: var(--red); }
+    .panel.def .panel-header { color: var(--blue); justify-content: flex-end; }
+
+    .field-label {
+      font-size: 0.68rem;
+      color: var(--sub);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+
+    .num-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .num-ctrl button {
+      width: 38px;
+      height: 46px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 1.4rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .num-ctrl button:hover { background: var(--card-b); }
+    .num-ctrl input {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 2rem;
+      font-weight: 800;
+      text-align: center;
+      padding: 6px 4px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .panel.atk .num-ctrl input:focus { border-color: var(--red); }
+    .panel.def .num-ctrl input:focus { border-color: var(--blue); }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+    /* ─── COMMIT SLIDER ─────────────────────── */
+    .commit-section {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .commit-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .commit-top .label { font-size: 0.67rem; color: var(--sub); text-transform: uppercase; letter-spacing: 1px; }
+    .commit-val-big { font-size: 1.2rem; font-weight: 800; color: var(--red); }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 99px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+      accent-color: var(--red);
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--red-g);
+      border: 2px solid rgba(255,255,255,0.3);
+      box-shadow: 0 0 10px rgba(232,64,64,0.5);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+    .commit-bottom {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 0.72rem;
+    }
+    .commit-prob { color: var(--gold); font-weight: 700; }
+    .commit-behind { color: var(--sub); }
+
+    /* ─── DICE INFO CHIP ───────────────────── */
+    .dice-chip {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dice-pips { font-size: 1.2rem; letter-spacing: 3px; }
+    .dice-chip-right { text-align: right; }
+    .dice-count-txt { font-size: 0.78rem; color: var(--text); font-weight: 600; }
+    .dice-req-txt   { font-size: 0.62rem; color: var(--sub); margin-top: 1px; }
+
+    .remain-chip {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 7px 12px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--sub);
+    }
+    .remain-chip.updated { color: var(--gold); border-color: rgba(240,180,41,0.3); }
+
+    /* ─── VS CENTER ─────────────────────────── */
+    .vs-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px 0;
+      min-width: 56px;
+    }
+    .vs-badge {
+      font-size: 0.7rem;
+      font-weight: 900;
+      color: var(--sub);
+      letter-spacing: 2px;
+      background: var(--card);
+      border: 1px solid var(--card-b);
+      border-radius: 99px;
+      padding: 6px 12px;
+    }
+
+    /* ─── BUTTONS ───────────────────────────── */
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      max-width: 860px;
+      margin-bottom: 10px;
+    }
+    .btn {
+      border: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: opacity 0.15s, transform 0.12s, box-shadow 0.15s;
+    }
+    .btn:hover:not(:disabled)  { opacity: 0.88; transform: translateY(-2px); }
+    .btn:active:not(:disabled) { transform: translateY(0); opacity: 0.75; }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-sub { font-size: 0.63rem; font-weight: 500; opacity: 0.75; }
+
+    .btn-manual {
+      background: var(--card);
+      border: 1px solid var(--card-b);
+      color: var(--text);
+      backdrop-filter: blur(12px);
+    }
+    .btn-blitz {
+      background: var(--gold-g);
+      color: #111;
+      box-shadow: 0 4px 22px rgba(240,180,41,0.4);
+    }
+
+    .btn-row-secondary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      max-width: 860px;
+      margin-bottom: 14px;
+    }
+    .btn-secondary {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--sub);
+      padding: 8px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-secondary:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+    .btn-secondary.danger:hover { border-color: var(--red); color: var(--red); }
+
+    /* ─── RESULTS PANEL ─────────────────────── */
+    .results-panel {
+      width: 100%;
+      max-width: 860px;
+      background: var(--card);
+      border: 1px solid var(--card-b);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 12px;
+      backdrop-filter: blur(12px);
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .results-dice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .dice-group-lbl {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--sub);
+      margin-bottom: 10px;
+    }
+    .dice-row { display: flex; gap: 8px; flex-wrap: wrap; min-height: 56px; align-items: center; }
+
+    .die {
+      width: 52px;
+      height: 52px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.75rem;
+      flex-shrink: 0;
+    }
+    .die.a {
+      background: linear-gradient(145deg, #b91c1c 0%, #7f1d1d 100%);
+      border: 1.5px solid rgba(255,100,100,0.25);
+      box-shadow: 0 4px 16px rgba(185,28,28,0.45);
+    }
+    .die.d {
+      background: linear-gradient(145deg, #1d4ed8 0%, #1e3a8a 100%);
+      border: 1.5px solid rgba(100,150,255,0.25);
+      box-shadow: 0 4px 16px rgba(29,78,216,0.45);
+    }
+    .die.won  { outline: 2.5px solid #22c55e; outline-offset: 1px; }
+    .die.lost { opacity: 0.45; }
+    .die.rolling { animation: tumble 0.4s cubic-bezier(0.36,0.07,0.19,0.97); }
+    @keyframes tumble {
+      0%   { transform: scale(0.7) rotate(-15deg); opacity: 0.5; }
+      50%  { transform: scale(1.12) rotate(8deg);  opacity: 1; }
+      100% { transform: scale(1) rotate(0); }
+    }
+
+    .hr { height: 1px; background: var(--border); margin: 14px 0; }
+
+    .cmp-list { display: flex; flex-direction: column; gap: 6px; }
+    .cmp-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg2);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.88rem;
+    }
+    .cv { font-size: 1.05rem; font-weight: 800; }
+    .cv.win  { color: var(--green); }
+    .cv.lose { color: var(--red); }
+    .cv.dwin { color: var(--green); }
+    .cv.dlose { color: var(--red); }
+    .cmp-vs { color: var(--sub); font-size: 0.72rem; }
+    .cmp-note { margin-left: auto; font-size: 0.7rem; color: var(--sub); }
+
+    .cas-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .cas-box {
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+    .cas-box.a { background: var(--red-dim);  border: 1px solid rgba(232,64,64,0.2); }
+    .cas-box.d { background: var(--blue-dim); border: 1px solid rgba(64,128,255,0.2); }
+    .cas-num   { font-size: 2.2rem; font-weight: 900; line-height: 1; }
+    .cas-box.a .cas-num { color: var(--red); }
+    .cas-box.d .cas-num { color: var(--blue); }
+    .cas-lbl   { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); margin-top: 3px; }
+    .cas-rem   { font-size: 0.78rem; color: var(--text); margin-top: 5px; }
+
+    .outcome-banner {
+      text-align: center;
+      padding: 14px;
+      border-radius: 11px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      margin-top: 14px;
+    }
+    .outcome-banner.red  { background: var(--red-dim);  color: var(--red);  border: 1px solid rgba(232,64,64,0.3); }
+    .outcome-banner.blue { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(64,128,255,0.3); }
+    .outcome-banner.gold { background: var(--gold-dim); color: var(--gold); border: 1px solid rgba(240,180,41,0.3); }
+
+    /* ─── BATTLE LOG ─────────────────────────── */
+    .log-card {
+      width: 100%;
+      max-width: 860px;
+      background: var(--card);
+      border: 1px solid var(--card-b);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      backdrop-filter: blur(12px);
+    }
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .log-header span {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--sub);
+    }
+    .log-clear {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--sub);
+      padding: 3px 9px;
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+    .log-clear:hover { border-color: var(--red); color: var(--red); }
+    .log-empty { font-size: 0.8rem; color: var(--sub); text-align: center; padding: 16px; }
+    .log-entries { display: flex; flex-direction: column; gap: 5px; max-height: 240px; overflow-y: auto; }
+    .log-row {
+      background: var(--bg2);
+      border-radius: 9px;
+      padding: 8px 13px;
+      font-size: 0.77rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--sub);
+    }
+    .log-row.blitz { border: 1px solid rgba(240,180,41,0.12); }
+    .log-left { display: flex; align-items: center; gap: 8px; }
+    .log-tag {
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      flex-shrink: 0;
+    }
+    .log-tag.a     { background: var(--red-dim);  color: var(--red); }
+    .log-tag.d     { background: var(--blue-dim); color: var(--blue); }
+    .log-tag.blitz { background: var(--gold-dim); color: var(--gold); }
+
+    /* ─── KBD ────────────────────────────────── */
+    .kbd-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    kbd {
+      font-size: 0.6rem;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 2px 7px;
+      color: var(--sub);
+      font-family: inherit;
+    }
+
+    @media (max-width: 640px) {
+      .setup-row { grid-template-columns: 1fr; }
+      .vs-col { flex-direction: row; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">⚔ Risk Europe</div>
+  <div class="header-sub">Advanced Dice Battle Simulator</div>
+</header>
+
+<!-- Win Probability Bar -->
+<div class="prob-card">
+  <div class="prob-header">
+    <span class="prob-side-label atk">⚔ Attacker</span>
+    <div style="text-align:center">
+      <div class="prob-center-pct" id="prob-pct">—</div>
+      <div class="prob-center-label">win probability</div>
+    </div>
+    <span class="prob-side-label def">Defender 🛡</span>
+  </div>
+  <div class="prob-track"><div class="prob-fill" id="prob-fill" style="width:50%"></div></div>
+  <div class="rec-row">
+    <span class="rec-pill either" id="rec-pill">Calculating…</span>
+    <span class="rec-desc" id="rec-desc"></span>
+  </div>
+</div>
+
+<!-- Setup Row -->
+<div class="setup-row">
+
+  <!-- ATTACKER -->
+  <div class="panel atk">
+    <div class="panel-header">⚔ Attacker</div>
+
+    <div>
+      <div class="field-label">Total Troops</div>
+      <div class="num-ctrl">
+        <button onclick="adj('atk-total',-1)">−</button>
+        <input type="number" id="atk-total" value="15" min="2" max="999" oninput="onAtkTotalChange()">
+        <button onclick="adj('atk-total', 1)">+</button>
+      </div>
+    </div>
+
+    <!-- Committed Slider -->
+    <div class="commit-section">
+      <div class="commit-top">
+        <div>
+          <div class="label">Committed</div>
+          <div class="commit-val-big" id="commit-val">14</div>
+        </div>
+        <div style="text-align:right">
+          <div class="label">Win Chance</div>
+          <div class="commit-val-big" id="commit-win-pct" style="color:var(--gold)">—</div>
+        </div>
+      </div>
+      <input type="range" id="commit-slider" min="1" max="14" value="14" oninput="onSliderChange()">
+      <div class="commit-bottom">
+        <span class="commit-prob" id="commit-dice-txt">🎲🎲🎲 3 dice</span>
+        <span class="commit-behind" id="commit-behind-txt">Leaving 1 behind</span>
+      </div>
+    </div>
+
+    <div class="dice-chip">
+      <div class="dice-pips" id="atk-pips">⚄⚄⚄</div>
+      <div class="dice-chip-right">
+        <div class="dice-count-txt" id="atk-dice-txt">3 dice</div>
+        <div class="dice-req-txt" id="atk-req-txt">4+ committed</div>
+      </div>
+    </div>
+    <div class="remain-chip" id="atk-remain" style="display:none"></div>
+  </div>
+
+  <!-- VS -->
+  <div class="vs-col">
+    <span class="vs-badge">VS</span>
+  </div>
+
+  <!-- DEFENDER -->
+  <div class="panel def">
+    <div class="panel-header">Defender 🛡</div>
+
+    <div>
+      <div class="field-label">Troops</div>
+      <div class="num-ctrl">
+        <button onclick="adj('def-troops',-1)">−</button>
+        <input type="number" id="def-troops" value="10" min="1" max="999" oninput="onDefChange()">
+        <button onclick="adj('def-troops', 1)">+</button>
+      </div>
+    </div>
+
+    <div class="dice-chip">
+      <div class="dice-pips" id="def-pips">⚄⚄</div>
+      <div class="dice-chip-right">
+        <div class="dice-count-txt" id="def-dice-txt">2 dice</div>
+        <div class="dice-req-txt" id="def-req-txt">2+ troops</div>
+      </div>
+    </div>
+    <div class="remain-chip" id="def-remain" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Roll Buttons -->
+<div class="btn-row">
+  <button class="btn btn-manual" id="btn-manual" onclick="manualRoll()">
+    🎲 Manual Roll
+    <span class="btn-sub">One round at a time</span>
+  </button>
+  <button class="btn btn-blitz" id="btn-blitz" onclick="blitzRoll()">
+    ⚡ Blitz!
+    <span class="btn-sub">Auto-resolve full battle</span>
+  </button>
+</div>
+<div class="btn-row-secondary">
+  <button class="btn-secondary" onclick="stopAttack()" id="btn-stop" style="display:none">⏹ Stop Attack</button>
+  <button class="btn-secondary danger" onclick="resetAll()">↺ Reset Battle</button>
+</div>
+<div class="kbd-row">
+  <kbd>Space = Roll</kbd><kbd>B = Blitz</kbd><kbd>R = Reset</kbd>
+</div>
+
+<!-- Manual Roll Results -->
+<div class="results-panel" id="results-panel" style="display:none">
+  <div class="results-dice-grid">
+    <div>
+      <div class="dice-group-lbl">⚔ Attacker Rolls</div>
+      <div class="dice-row" id="atk-dice-row"></div>
+    </div>
+    <div>
+      <div class="dice-group-lbl">🛡 Defender Rolls</div>
+      <div class="dice-row" id="def-dice-row"></div>
+    </div>
+  </div>
+  <div class="hr"></div>
+  <div class="cmp-list" id="cmp-list"></div>
+  <div class="cas-grid">
+    <div class="cas-box a">
+      <div class="cas-num" id="cas-atk">0</div>
+      <div class="cas-lbl">Attacker Losses</div>
+      <div class="cas-rem" id="rem-atk"></div>
+    </div>
+    <div class="cas-box d">
+      <div class="cas-num" id="cas-def">0</div>
+      <div class="cas-lbl">Defender Losses</div>
+      <div class="cas-rem" id="rem-def"></div>
+    </div>
+  </div>
+  <div class="outcome-banner" id="outcome-banner" style="display:none"></div>
+</div>
+
+<!-- Blitz Results -->
+<div class="results-panel" id="blitz-panel" style="display:none">
+  <div style="text-align:center">
+    <div class="dice-group-lbl" style="margin-bottom:10px">⚡ Blitz Result</div>
+    <div style="font-size:1.5rem; font-weight:900; margin-bottom:8px" id="blitz-headline"></div>
+    <div style="display:flex; justify-content:center; gap:20px; flex-wrap:wrap; margin:14px 0" id="blitz-stats"></div>
+  </div>
+  <div class="outcome-banner" id="blitz-banner" style="display:none"></div>
+</div>
+
+<!-- Log -->
+<div class="log-card">
+  <div class="log-header">
+    <span>Battle Log</span>
+    <button class="log-clear" onclick="clearLog()">Clear</button>
+  </div>
+  <div id="log-entries" class="log-entries"></div>
+  <div class="log-empty" id="log-empty">No battles yet — roll to begin.</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// PROBABILITY ENGINE
+// ═══════════════════════════════════════════════
+
+// Brute-force single-round probabilities (cached)
+const _rc = {};
+function getRoundProbs(ad, dd) {
+  const key = `${ad}x${dd}`;
+  if (_rc[key]) return _rc[key];
+  const pairs = Math.min(ad, dd);
+  const total  = 6 ** (ad + dd);
+  const counts = {};
+  for (let idx = 0; idx < total; idx++) {
+    let n = idx;
+    const a = [], d = [];
+    for (let i = 0; i < ad; i++) { a.push(n % 6 + 1); n = Math.floor(n / 6); }
+    for (let i = 0; i < dd; i++) { d.push(n % 6 + 1); n = Math.floor(n / 6); }
+    a.sort((x,y)=>y-x); d.sort((x,y)=>y-x);
+    let al = 0;
+    for (let p = 0; p < pairs; p++) if (a[p] <= d[p]) al++;
+    counts[al] = (counts[al]||0) + 1;
+  }
+  const probs = {};
+  for (const [k,v] of Object.entries(counts)) probs[+k] = v/total;
+  return (_rc[key] = probs);
+}
+// Pre-warm all 6 configs
+for (let a=1;a<=3;a++) for (let d=1;d<=2;d++) getRoundProbs(a,d);
+
+// Iterative bottom-up DP win probability table
+// wp[a][d] = P(attacker with 'a' troops defeats 'b' defenders)
+const MAX_T = 120;
+const _M = MAX_T + 1;
+const wpTable = new Float64Array(_M * _M); // default 0
+
+(function buildTable() {
+  // dp[a][0] = 1.0 — no defenders, attacker wins
+  for (let a = 0; a <= MAX_T; a++) wpTable[a * _M + 0] = 1.0;
+  // dp[0|1][d>=1] = 0.0 (default)
+  // Fill in order of increasing (a + d) so sub-states are ready
+  for (let sum = 3; sum <= MAX_T * 2; sum++) {
+    for (let a = 2; a <= Math.min(MAX_T, sum-1); a++) {
+      const d = sum - a;
+      if (d < 1 || d > MAX_T) continue;
+      const ad = Math.min(3, a-1);
+      const dd = Math.min(2, d);
+      const rp = getRoundProbs(ad, dd);
+      const pairs = Math.min(ad, dd);
+      let p = 0;
+      for (const [k, prob] of Object.entries(rp)) {
+        const al = +k, dl = pairs - al;
+        const na = a - al, nd = d - dl;
+        p += prob * (nd <= 0 ? 1.0 : na <= 1 ? 0.0 : wpTable[na*_M+nd]);
+      }
+      wpTable[a*_M+d] = p;
+    }
+  }
+})();
+
+function getWP(a, d) {
+  if (a < 2) return 0;
+  if (d <= 0) return 1;
+  return wpTable[Math.min(a,MAX_T)*_M + Math.min(d,MAX_T)];
+}
+
+// Quick verification in console
+// console.table({
+//   '15v10': Math.round(getWP(15,10)*100)+'%', // →100%
+//   '10v9':  Math.round(getWP(10,9)*100)+'%',  // →74%
+//   '10v6':  Math.round(getWP(10,6)*100)+'%',  // →100%
+//   '51v67': Math.round(getWP(51,67)*100)+'%', // →15%
+//   '83v89': Math.round(getWP(83,89)*100)+'%', // →78%
+//   '71v89': Math.round(getWP(71,89)*100)+'%', // →24%
+// });
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+
+let G = {
+  atkCommitted: 14,  // troops committed to this battle (excluding the 1 left behind)
+  atkCurrent:   14,  // current committed troops mid-battle
+  defStart:     10,
+  defCurrent:   10,
+  inBattle:     false,
+  battleOver:   false,
+  rounds:       0,
+};
+
+// ═══════════════════════════════════════════════
+// INPUT HELPERS
+// ═══════════════════════════════════════════════
+
+function getAtkTotal() { return Math.max(2, Math.min(999, parseInt(document.getElementById('atk-total').value)||2)); }
+function getDefTroops(){ return Math.max(1, Math.min(999, parseInt(document.getElementById('def-troops').value)||1)); }
+function getCommitted(){ return Math.max(1, Math.min(999, parseInt(document.getElementById('commit-slider').value)||1)); }
+
+function adj(id, delta) {
+  const el = document.getElementById(id);
+  const minVal = id === 'def-troops' ? 1 : 2;
+  const newVal = Math.max(minVal, parseInt(el.value||minVal) + delta);
+  el.value = newVal;
+  id === 'atk-total' ? onAtkTotalChange() : onDefChange();
+}
+
+function onAtkTotalChange() {
+  const total = getAtkTotal();
+  const slider = document.getElementById('commit-slider');
+  slider.max = total - 1;
+  // Keep committed ≤ total-1
+  if (parseInt(slider.value) > total - 1) slider.value = total - 1;
+  if (parseInt(slider.value) < 1) slider.value = 1;
+  onSliderChange();
+}
+
+function onSliderChange() {
+  updateUI();
+}
+
+function onDefChange() {
+  updateUI();
+}
+
+// ═══════════════════════════════════════════════
+// UI UPDATE
+// ═══════════════════════════════════════════════
+
+const PIPS = ['','⚀','⚁','⚂','⚃','⚄','⚅'];
+
+function diceCount(troops) {
+  if (troops >= 4) return 3;
+  if (troops >= 3) return 2;
+  if (troops >= 2) return 1;
+  return 0;
+}
+function defDiceCount(troops) { return troops >= 2 ? 2 : troops >= 1 ? 1 : 0; }
+
+function updateUI() {
+  const total    = getAtkTotal();
+  const committed= getCommitted();
+  const def      = G.inBattle ? G.defCurrent : getDefTroops();
+
+  // Slider bounds
+  const slider = document.getElementById('commit-slider');
+  slider.min = 1;
+  slider.max = total - 1;
+
+  // Slider labels
+  const ad = diceCount(committed);
+  document.getElementById('commit-val').textContent     = committed;
+  document.getElementById('commit-behind-txt').textContent = `Leaving ${total - committed} behind`;
+  document.getElementById('commit-dice-txt').textContent   = ad ? `${PIPS[6].repeat(ad)} ${ad} ${ad===1?'die':'dice'}` : 'Cannot attack';
+
+  const sliderWP = Math.round(getWP(committed, def) * 100);
+  document.getElementById('commit-win-pct').textContent = `${sliderWP}%`;
+
+  // Main dice display
+  const atkForDice = G.inBattle ? G.atkCurrent : committed;
+  const adMain = diceCount(atkForDice);
+  document.getElementById('atk-pips').textContent    = adMain ? PIPS[6].repeat(adMain) : '—';
+  document.getElementById('atk-dice-txt').textContent = adMain ? `${adMain} ${adMain===1?'die':'dice'}` : 'Cannot attack';
+  document.getElementById('atk-req-txt').textContent  = adMain===3?'4+ committed':adMain===2?'3+ committed':adMain===1?'2+ committed':'≤1 committed';
+
+  const dd = defDiceCount(def);
+  document.getElementById('def-pips').textContent    = dd ? PIPS[6].repeat(dd) : '—';
+  document.getElementById('def-dice-txt').textContent = dd ? `${dd} ${dd===1?'die':'dice'}` : 'Eliminated';
+  document.getElementById('def-req-txt').textContent  = dd===2?'2+ troops':'1 troop';
+
+  // Win probability bar (uses committed for attacker)
+  const atkForProb = G.inBattle ? G.atkCurrent : committed;
+  const wp  = getWP(atkForProb, def);
+  const pct = Math.round(wp * 100);
+  document.getElementById('prob-pct').textContent   = `${pct}%`;
+  document.getElementById('prob-fill').style.width  = `${pct}%`;
+
+  const pill = document.getElementById('rec-pill');
+  const desc = document.getElementById('rec-desc');
+  if (wp >= 0.75) {
+    pill.className = 'rec-pill blitz'; pill.textContent = '⚡ Blitz Recommended';
+    desc.textContent = 'High odds — Blitz amplifies your advantage';
+  } else if (wp <= 0.25) {
+    pill.className = 'rec-pill manual'; pill.textContent = '🎲 Manual Recommended';
+    desc.textContent = 'Low odds — Manual roll preserves optionality';
+  } else {
+    pill.className = 'rec-pill either'; pill.textContent = 'Either Mode Viable';
+    desc.textContent = `${pct > 50 ? 'Slight advantage' : 'Slight disadvantage'} — choose your strategy`;
+  }
+
+  // Buttons
+  const canRoll = !G.battleOver && atkForDice >= 2 && def >= 1;
+  document.getElementById('btn-manual').disabled = !canRoll;
+  document.getElementById('btn-blitz').disabled  = !canRoll;
+}
+
+// ═══════════════════════════════════════════════
+// MANUAL ROLL
+// ═══════════════════════════════════════════════
+
+function manualRoll() {
+  if (G.battleOver) return;
+
+  // First roll — capture starting state
+  if (!G.inBattle) {
+    G.atkCommitted = getCommitted();
+    G.atkCurrent   = G.atkCommitted;
+    G.defStart     = getDefTroops();
+    G.defCurrent   = G.defStart;
+    G.inBattle     = true;
+    G.rounds       = 0;
+    document.getElementById('btn-stop').style.display = '';
+  }
+
+  const ad = diceCount(G.atkCurrent);
+  const dd = defDiceCount(G.defCurrent);
+  if (ad === 0 || dd === 0) return;
+
+  const aRolls = Array.from({length: ad}, () => Math.floor(Math.random()*6)+1);
+  const dRolls = Array.from({length: dd}, () => Math.floor(Math.random()*6)+1);
+  const aS = [...aRolls].sort((a,b)=>b-a);
+  const dS = [...dRolls].sort((a,b)=>b-a);
+  const pairs = Math.min(ad, dd);
+
+  let al=0, dl=0;
+  const pairRes = [];
+  for (let i=0; i<pairs; i++) {
+    if (aS[i] > dS[i]) { dl++; pairRes.push('def'); }
+    else                { al++; pairRes.push('atk'); }
+  }
+
+  G.atkCurrent -= al;
+  G.defCurrent -= dl;
+  G.rounds++;
+
+  renderManual(aS, dS, pairRes, al, dl);
+  addLog('manual', aS, dS, al, dl, G.atkCurrent, G.defCurrent);
+  updateRemain();
+  updateUI();
+
+  if (G.defCurrent <= 0 || G.atkCurrent < 2) finishBattle();
+  else showOutcomeBanner('gold', `⚔ ${G.atkCurrent} vs 🛡 ${G.defCurrent} — roll again or stop`);
+}
+
+function renderManual(aS, dS, pairRes, al, dl) {
+  const rp = document.getElementById('results-panel');
+  rp.style.display = '';
+  document.getElementById('blitz-panel').style.display = 'none';
+  document.getElementById('outcome-banner').style.display = 'none';
+
+  // Attacker dice
+  const ar = document.getElementById('atk-dice-row');
+  ar.innerHTML = '';
+  aS.forEach((v,i) => {
+    const el = mkDie(v,'a');
+    if (i < pairRes.length) el.classList.add(pairRes[i]==='def' ? 'won' : 'lost');
+    ar.appendChild(el);
+    setTimeout(()=>el.classList.add('rolling'), i*55);
+  });
+
+  // Defender dice
+  const dr = document.getElementById('def-dice-row');
+  dr.innerHTML = '';
+  dS.forEach((v,i) => {
+    const el = mkDie(v,'d');
+    if (i < pairRes.length) el.classList.add(pairRes[i]==='atk' ? 'won' : 'lost');
+    dr.appendChild(el);
+    setTimeout(()=>el.classList.add('rolling'), i*55+70);
+  });
+
+  // Comparisons
+  const cl = document.getElementById('cmp-list');
+  cl.innerHTML = '';
+  const pairs = Math.min(aS.length, dS.length);
+  for (let i=0; i<pairs; i++) {
+    const atkW = pairRes[i]==='def';
+    const tie  = aS[i]===dS[i];
+    const row  = document.createElement('div');
+    row.className = 'cmp-row';
+    row.innerHTML = `
+      <span class="cv ${atkW?'win':'lose'}">${PIPS[aS[i]]} ${aS[i]}</span>
+      <span class="cmp-vs">vs</span>
+      <span class="cv ${!atkW?'dwin':'dlose'}">${PIPS[dS[i]]} ${dS[i]}${tie?' (tie→def)':''}</span>
+      <span class="cmp-note">${atkW ? '→ Defender –1' : '→ Attacker –1'}</span>
+    `;
+    cl.appendChild(row);
+  }
+
+  document.getElementById('cas-atk').textContent = al;
+  document.getElementById('cas-def').textContent = dl;
+  document.getElementById('rem-atk').textContent = `${G.atkCurrent} remaining`;
+  document.getElementById('rem-def').textContent = `${G.defCurrent} remaining`;
+}
+
+function mkDie(v, cls) {
+  const d = document.createElement('div');
+  d.className = `die ${cls}`;
+  d.textContent = PIPS[v];
+  return d;
+}
+
+// ═══════════════════════════════════════════════
+// BLITZ ROLL
+// ═══════════════════════════════════════════════
+
+function blitzRoll() {
+  if (G.battleOver) return;
+
+  const committed = G.inBattle ? G.atkCurrent : getCommitted();
+  const defStart  = G.inBattle ? G.defCurrent : getDefTroops();
+
+  if (!G.inBattle) {
+    G.atkCommitted = committed;
+    G.atkCurrent   = committed;
+    G.defStart     = defStart;
+    G.defCurrent   = defStart;
+    G.inBattle     = true;
+    G.rounds       = 0;
+  }
+
+  let a = G.atkCurrent, d = G.defCurrent;
+  let totalAL=0, totalDL=0, rounds=0;
+
+  while (a >= 2 && d > 0) {
+    const ad = Math.min(3, a-1);
+    const dd = Math.min(2, d);
+    const rp = getRoundProbs(ad, dd);
+    const pairs = Math.min(ad, dd);
+    let r = Math.random(), cumul=0, al=0;
+    for (const [k,p] of Object.entries(rp)) {
+      cumul += p;
+      if (r <= cumul) { al=+k; break; }
+    }
+    const dl = pairs - al;
+    a -= al; d -= dl;
+    totalAL += al; totalDL += dl; rounds++;
+  }
+
+  G.atkCurrent = a;
+  G.defCurrent = d;
+  G.rounds    += rounds;
+
+  document.getElementById('results-panel').style.display = 'none';
+  const bp = document.getElementById('blitz-panel');
+  bp.style.display = '';
+
+  const atkWon = d <= 0;
+  document.getElementById('blitz-headline').textContent = atkWon
+    ? '⚔ Attacker Wins — Territory Captured!'
+    : '🛡 Defender Wins — Attack Repelled!';
+  document.getElementById('blitz-headline').style.color = atkWon ? 'var(--red)' : 'var(--blue)';
+
+  document.getElementById('blitz-stats').innerHTML = [
+    ['Rounds', rounds],
+    ['Attacker lost', totalAL],
+    ['Defender lost', totalDL],
+    ['Attacker remaining', a],
+    ['Defender remaining', d],
+  ].map(([l,v])=>`<div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:var(--text)">${v}</div><div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;color:var(--sub)">${l}</div></div>`).join('');
+
+  document.getElementById('blitz-banner').style.display = 'none';
+  addLog('blitz', null, null, totalAL, totalDL, a, d, rounds);
+  updateRemain();
+  finishBattle();
+}
+
+// ═══════════════════════════════════════════════
+// BATTLE END
+// ═══════════════════════════════════════════════
+
+function finishBattle() {
+  G.battleOver = true;
+  G.inBattle   = false;
+  const a = G.atkCurrent, d = G.defCurrent;
+
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('btn-manual').disabled = true;
+  document.getElementById('btn-blitz').disabled  = true;
+
+  if (d <= 0) {
+    showOutcomeBanner('red',  `⚔ Territory Captured! Attacker holds with ${a} troop${a!==1?'s':''}.`);
+    showBlitzBanner  ('red',  `⚔ Territory Captured! Attacker holds with ${a} troop${a!==1?'s':''}.`);
+  } else {
+    showOutcomeBanner('blue', `🛡 Attack Repelled! Defender holds with ${d} troop${d!==1?'s':''}.`);
+    showBlitzBanner  ('blue', `🛡 Attack Repelled! Defender holds with ${d} troop${d!==1?'s':''}.`);
+  }
+  updateUI();
+}
+
+function showOutcomeBanner(cls, text) {
+  const b = document.getElementById('outcome-banner');
+  b.style.display = ''; b.className = `outcome-banner ${cls}`; b.textContent = text;
+}
+function showBlitzBanner(cls, text) {
+  const b = document.getElementById('blitz-banner');
+  b.style.display = ''; b.className = `outcome-banner ${cls}`; b.textContent = text;
+}
+
+function stopAttack() {
+  G.inBattle   = false;
+  G.battleOver = true;
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('btn-manual').disabled = true;
+  document.getElementById('btn-blitz').disabled  = true;
+  showOutcomeBanner('gold', `Attack stopped. ${G.atkCurrent} attackers vs ${G.defCurrent} defenders remain.`);
+  updateRemain();
+  updateUI();
+}
+
+function resetAll() {
+  G = { atkCommitted:14, atkCurrent:0, defStart:0, defCurrent:0, inBattle:false, battleOver:false, rounds:0 };
+  document.getElementById('results-panel').style.display = 'none';
+  document.getElementById('blitz-panel').style.display   = 'none';
+  document.getElementById('btn-stop').style.display      = 'none';
+  document.getElementById('outcome-banner').style.display = 'none';
+  document.getElementById('blitz-banner').style.display  = 'none';
+  document.getElementById('atk-remain').style.display    = 'none';
+  document.getElementById('def-remain').style.display    = 'none';
+  updateUI();
+}
+
+function updateRemain() {
+  const a = document.getElementById('atk-remain');
+  const d = document.getElementById('def-remain');
+  a.style.display = ''; a.className = 'remain-chip updated';
+  a.textContent = `${G.atkCurrent} committed remaining`;
+  d.style.display = ''; d.className = 'remain-chip updated';
+  d.textContent = `${G.defCurrent} remaining`;
+}
+
+// ═══════════════════════════════════════════════
+// BATTLE LOG
+// ═══════════════════════════════════════════════
+
+function addLog(mode, aR, dR, al, dl, aRem, dRem, rounds) {
+  document.getElementById('log-empty').style.display = 'none';
+  const el   = document.getElementById('log-entries');
+  const row  = document.createElement('div');
+
+  const winner = dRem<=0 ? 'a' : aRem<2 ? 'd' : null;
+
+  if (mode === 'blitz') {
+    row.className = 'log-row blitz';
+    row.innerHTML = `
+      <div class="log-left">
+        <span class="log-tag blitz">⚡ Blitz</span>
+        <span>${rounds} rounds — ATK −${al}, DEF −${dl}</span>
+      </div>
+      <span>${aRem} vs ${dRem}${winner==='a'?' 🏳':winner==='d'?' 🛡':''}</span>
+    `;
+  } else {
+    const tag = winner==='a' ? 'a' : winner==='d' ? 'd' : (dl>al ? 'a' : 'd');
+    const lbl = winner==='a' ? '⚔ Captured' : winner==='d' ? '🛡 Held'
+              : dl>al ? `ATK +${dl-al}` : al>dl ? `DEF +${al-dl}` : 'Split';
+    row.className = 'log-row';
+    row.innerHTML = `
+      <div class="log-left">
+        <span class="log-tag ${tag}">${lbl}</span>
+        <span>[${aR.join(',')}] vs [${dR.join(',')}]</span>
+      </div>
+      <span>${aRem} vs ${dRem}</span>
+    `;
+  }
+
+  el.insertBefore(row, el.firstChild);
+  if (el.children.length > 50) el.removeChild(el.lastChild);
+}
+
+function clearLog() {
+  document.getElementById('log-entries').innerHTML = '';
+  document.getElementById('log-empty').style.display = '';
+}
+
+// ═══════════════════════════════════════════════
+// KEYBOARD
+// ═══════════════════════════════════════════════
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName==='INPUT') return;
+  if (e.code==='Space') { e.preventDefault(); manualRoll(); }
+  if (e.key==='b'||e.key==='B') blitzRoll();
+  if (e.key==='r'||e.key==='R') resetAll();
+});
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+updateUI();
+</script>
+</body>
+</html>
